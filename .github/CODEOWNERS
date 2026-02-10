@@ -1,0 +1,6 @@
+# GitHub CODEOWNERS file
+# Require code owner approval for all changes
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# All files require review from the repository owner
+* @TannerLivingston

@@ -1,0 +1,215 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:DvdExtrasRenamer.ViewModels"
+        xmlns:m="using:DvdExtrasRenamer.Models"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="900"
+        x:Class="DvdExtrasRenamer.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="DvdExtrasRenamer"
+        Background="#F5F5F5">
+
+    <Window.Styles>
+        <Style Selector="TextBox">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#1A1A1A"/>
+            <Setter Property="BorderBrush" Value="#007AFF"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="CaretBrush" Value="#1A1A1A"/>
+            <Setter Property="Padding" Value="8,6"/>
+        </Style>
+        <Style Selector="TextBox:focus">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#1A1A1A"/>
+            <Setter Property="BorderBrush" Value="#0051C3"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="CaretBrush" Value="#1A1A1A"/>
+        </Style>
+        <Style Selector="TextBox:pointerover">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#1A1A1A"/>
+            <Setter Property="BorderBrush" Value="#007AFF"/>
+        </Style>
+        <Style Selector="Button">
+            <Setter Property="Background" Value="#007AFF"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button:pointerover">
+            <Setter Property="Background" Value="#0051C3"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="Button:pressed">
+            <Setter Property="Background" Value="#003D80"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+    </Window.Styles>
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+    
+    <ScrollViewer Background="#F5F5F5">
+        <StackPanel Margin="30" Spacing="15">
+            <!-- Directory Selection Section -->
+            <StackPanel Spacing="10">
+                <TextBlock Text="Video Directory" FontWeight="Bold" FontSize="14" Foreground="#1A1A1A"/>
+                <StackPanel Orientation="Horizontal" Spacing="15" VerticalAlignment="Center">
+                    <Button Name="OpenFileButton" Content="Browse Directory" Padding="12,10"
+                            Click="OpenFileButton_Clicked" Background="#007AFF" Foreground="White" FontWeight="Bold"/>
+                    <TextBlock Name="FilePathTextBlock" TextWrapping="Wrap" Text="No directory selected" Width="650" FontSize="14" VerticalAlignment="Center" Foreground="#333333"/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- DVD Lookup Section -->
+            <Border BorderBrush="#D0D0D0" BorderThickness="0,1,0,0" Padding="0,15,0,0"/>
+            
+            <StackPanel Spacing="8">
+                <TextBlock Text="DVD Lookup" FontWeight="Bold" FontSize="14" Foreground="#1A1A1A"/>
+                
+                <StackPanel Orientation="Horizontal" Spacing="15">
+                    <StackPanel Width="400">
+                        <TextBlock Text="Title" FontSize="12" Margin="0,0,0,4" Foreground="#333333"/>
+                        <TextBox Name="TitleTextBox" 
+                                 Text="{Binding Title}"
+                                 Padding="8,6"
+                                 FontSize="12"
+                                 IsEnabled="{Binding IsLookupNotInProgress}"/>
+                    </StackPanel>
+                    <StackPanel Width="100">
+                        <TextBlock Text="Year" FontSize="12" Margin="0,0,0,4" Foreground="#333333"/>
+                        <TextBox Name="YearTextBox" 
+                                 Text="{Binding Year}"
+                                 Padding="8,6"
+                                 FontSize="12"
+                                 IsEnabled="{Binding IsLookupNotInProgress}"/>
+                    </StackPanel>
+                    <StackPanel Width="400">
+                        <TextBlock Text="Director" FontSize="12" Margin="0,0,0,4" Foreground="#333333"/>
+                        <TextBox Name="DirectorTextBox" 
+                                 Text="{Binding Director}"
+                                 Padding="8,6"
+                                 FontSize="12"
+                                 IsEnabled="{Binding IsLookupNotInProgress}"/>
+                    </StackPanel>
+                </StackPanel>
+                
+                <Button Name="LookupButton" Content="Lookup DVD" Width="150" Padding="10,8"
+                        Command="{Binding PerformLookupCommand}"
+                        IsEnabled="{Binding IsLookupNotInProgress}"
+                        Background="#007AFF" Foreground="White" FontWeight="Bold"/>
+                
+                <TextBlock Name="SelectionOptions" Text="{Binding LookupResult}" FontSize="11" Foreground="#666666" TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <!-- DVD Selection Section -->
+            <StackPanel Spacing="8" IsVisible="{Binding Items.Count, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <TextBlock Text="Available DVDs" FontWeight="Bold" FontSize="12" Margin="0,10,0,0" Foreground="#1A1A1A"/>
+                <ScrollViewer MaxHeight="120" BorderBrush="#D0D0D0" BorderThickness="1" Background="White">
+                    <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Content="{Binding Title}" 
+                                        Margin="4"
+                                        Padding="6,4"
+                                        FontSize="11"
+                                        IsEnabled="{Binding DataContext.IsLookupNotInProgress, RelativeSource={RelativeSource FindAncestor, AncestorType=Window}}"
+                                        Command="{Binding DataContext.SelectItemCommand, RelativeSource={RelativeSource FindAncestor, AncestorType=Window}}"
+                                        CommandParameter="{Binding .}"
+                                        Background="#E8E8E8" Foreground="#1A1A1A"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                
+                <!-- DVD Selection Status -->
+                <Border BorderBrush="#34C759" BorderThickness="1" Padding="10" CornerRadius="4" Background="#F0F9F5" IsVisible="{Binding IsDvdSelected}">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding SelectedDvdTitle, StringFormat='DVD: {0}'}" FontWeight="Bold" FontSize="11" Foreground="#1A6B3B"/>
+                        <TextBlock Text="Click 'Match Videos' to scan your directory for matches." FontSize="10" Foreground="#333333" TextWrapping="Wrap"/>
+                        <Button Content="View on dvdcompare.net" Padding="0" Background="Transparent" Foreground="#0066CC" 
+                                FontSize="10" Cursor="Hand" Command="{Binding OpenDvdLinkCommand}"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- Match Results Section -->
+            <Border BorderBrush="#D0D0D0" BorderThickness="0,1,0,0" Padding="0,15,0,0"/>
+            
+            <StackPanel Spacing="8">
+                <TextBlock Text="Video Matching Results" FontWeight="Bold" FontSize="14" Foreground="#1A1A1A"/>
+                
+                <!-- Match Videos Button -->
+                <Button Name="MatchVideos" Content="Match Videos in Directory" Width="220" Padding="10,8"
+                        Command="{Binding MatchVideosInDirectoryCommand}"
+                        CommandParameter="{Binding SelectedDirectory}"
+                        IsEnabled="{Binding IsDvdSelected}"
+                        Background="#007AFF" Foreground="White" FontWeight="Bold"/>
+                
+                <!-- Matching Status -->
+                <TextBlock Text="{Binding MatchResults}" FontSize="11" Foreground="#C41C3E" TextWrapping="Wrap"
+                           IsVisible="{Binding IsMatchingInProgress}" FontWeight="Bold"/>
+                
+                <!-- Progress/Log TextBox -->
+                <ScrollViewer Height="150" BorderBrush="#D0D0D0" BorderThickness="1" Background="White">
+                    <TextBlock Name="ProgressTextBlock"
+                               Text="{Binding MatchResults}"
+                               TextWrapping="Wrap"
+                               FontSize="11"
+                               FontFamily="Courier New"
+                               Foreground="#1A1A1A"
+                               Padding="8"/>
+                </ScrollViewer>
+                
+                <!-- Match List with Rename Buttons -->
+                <TextBlock Text="Matched Videos" FontSize="12" Margin="0,10,0,5" FontWeight="Bold" IsVisible="{Binding MatchList.Count, Converter={x:Static ObjectConverters.IsNotNull}}" Foreground="#1A1A1A"/>
+                <ScrollViewer MaxHeight="300" BorderBrush="#D0D0D0" BorderThickness="1" IsVisible="{Binding MatchList.Count, Converter={x:Static ObjectConverters.IsNotNull}}" Background="White">
+                    <ItemsControl ItemsSource="{Binding MatchList}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Padding="10" Margin="4" HorizontalAlignment="Left"
+                                            Command="{Binding DataContext.RenameVideoCommand, RelativeSource={RelativeSource FindAncestor, AncestorType=Window}}"
+                                            CommandParameter="{Binding .}"
+                                            IsEnabled="{Binding IsNotRenamed}"
+                                            IsVisible="{Binding IsNotRenamed}"
+                                            Background="White"
+                                            BorderBrush="#D0D0D0"
+                                            BorderThickness="1"
+                                            CornerRadius="4">
+                                        <TextBlock FontSize="11" VerticalAlignment="Center" Foreground="#1A1A1A">
+                                            <Run Text="{Binding VideoFile}" FontWeight="Bold"/>
+                                            <Run Text=" → "/>
+                                            <Run Text="{Binding ExtraTitle}"/>
+                                        </TextBlock>
+                                    </Button>
+                                    <Border Padding="10" Margin="4" CornerRadius="4" Background="#F5F5F5" BorderBrush="#D0D0D0" BorderThickness="1" 
+                                            IsVisible="{Binding IsRenamed}" Opacity="0.5">
+                                        <TextBlock FontSize="11" VerticalAlignment="Center" Foreground="#666666">
+                                            <Run Text="{Binding VideoFile}" FontWeight="Bold"/>
+                                            <Run Text=" → "/>
+                                            <Run Text="{Binding ExtraTitle}"/>
+                                            <Run Text=" ✅"/>
+                                        </TextBlock>
+                                    </Border>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                
+                <!-- Rename Status -->
+                <TextBlock Text="{Binding CurrentRenameStatus}" FontSize="11" Foreground="#FF9800" TextWrapping="Wrap"
+                           IsVisible="{Binding IsRenameInProgress}" FontWeight="Bold"/>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+    
+</Window>

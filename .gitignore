@@ -1,0 +1,38 @@
+# Build artifacts
+bin/
+obj/
+/packages/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE-specific files
+.vs/
+.vscode/
+.idea/
+*.sln.iml
+riderModule.iml
+*.user
+*.userprefs
+*.swp
+*.swo
+*~
+
+# Cache files
+/_ReSharper.Caches/
+.cache/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Application output
+publish/
+/publish/
+
+# Local configuration
+appsettings.local.json
+
+# Build log
+build-log.txt
