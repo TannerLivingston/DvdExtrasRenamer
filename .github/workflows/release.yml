@@ -37,29 +37,46 @@ jobs:
       - name: Publish
         shell: bash
         run: |
+          OUTPUT_DIR=release-${{ matrix.rid }}
+
           dotnet publish ./DvdExtrasRenamer/DvdExtrasRenamer.csproj \
             -c Release \
             -r ${{ matrix.rid }} \
             --self-contained true \
-            -o publish \
-            /p:PublishSingleFile=true \
-            /p:IncludeNativeLibrariesForSelfExtract=true \
-            /p:DebugType=None \
-            /p:DebugSymbols=false \
-            /p:Version=${VERSION} \
-            /p:AssemblyVersion=${VERSION} \
-            /p:FileVersion=${VERSION} \
-            /p:InformationalVersion=${VERSION}
+            -o $OUTPUT_DIR \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:DebugType=None \
+            -p:DebugSymbols=false \
+            -p:Version=${VERSION} \
+            -p:AssemblyVersion=${VERSION} \
+            -p:FileVersion=${VERSION} \
+            -p:InformationalVersion=${VERSION}
 
-      - name: Zip output
+      - name: Zip build
         shell: bash
         run: |
-          zip -r DvdExtrasRenamer-${VERSION}-${{ matrix.rid }}.zip publish
+          ZIP_NAME=DvdExtrasRenamer-${VERSION}-${{ matrix.rid }}.zip
+          cd release-${{ matrix.rid }}
+          zip -r ../$ZIP_NAME .
+          cd ..
+
+      - name: Generate checksum
+        shell: bash
+        run: |
+          ZIP_NAME=DvdExtrasRenamer-${VERSION}-${{ matrix.rid }}.zip
+          if command -v sha256sum > /dev/null; then
+            sha256sum $ZIP_NAME > $ZIP_NAME.sha256
+          else
+            shasum -a 256 $ZIP_NAME > $ZIP_NAME.sha256
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: DvdExtrasRenamer-${{ matrix.rid }}
-          path: DvdExtrasRenamer-${{ env.VERSION }}-${{ matrix.rid }}.zip
+          path: |
+            DvdExtrasRenamer-${{ env.VERSION }}-${{ matrix.rid }}.zip
+            DvdExtrasRenamer-${{ env.VERSION }}-${{ matrix.rid }}.zip.sha256
 
   release:
     needs: build
@@ -73,11 +90,11 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir release-files
-          find artifacts -name "*.zip" -exec cp {} release-files/ \;
+          find artifacts -type f -exec cp {} release-files/ \;
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-files/*.zip
+          files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
