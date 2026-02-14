@@ -39,7 +39,7 @@ jobs:
 
       - name: Publish
         run: |
-          dotnet publish ./DvdExtrasRenamer.csproj \
+          dotnet publish ./DvdExtrasRenamer/DvdExtrasRenamer.csproj \
             -c Release \
             -r ${{ matrix.rid }} \
             --self-contained true \
