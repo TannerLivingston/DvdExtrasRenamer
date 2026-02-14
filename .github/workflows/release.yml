@@ -22,22 +22,20 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Extract version from tag
+      - name: Extract version
         shell: bash
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "Detected version: $VERSION"
 
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
       - name: Publish
+        shell: bash
         run: |
           dotnet publish ./DvdExtrasRenamer/DvdExtrasRenamer.csproj \
             -c Release \
@@ -58,8 +56,7 @@ jobs:
         run: |
           zip -r DvdExtrasRenamer-${VERSION}-${{ matrix.rid }}.zip publish
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: DvdExtrasRenamer-${{ matrix.rid }}
           path: DvdExtrasRenamer-${{ env.VERSION }}-${{ matrix.rid }}.zip
@@ -69,13 +66,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
-      - name: Create GitHub Release
+      - name: Flatten artifacts
+        run: |
+          mkdir release-files
+          find artifacts -name "*.zip" -exec cp {} release-files/ \;
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          files: |
-            */*.zip
+          files: release-files/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
