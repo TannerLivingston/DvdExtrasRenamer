@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
@@ -122,7 +120,7 @@ public class DvdDotComParser
     /// <summary>
     /// Cleans up extras titles for display and filesystem use by removing:
     /// - Quote marks (single and double)
-    /// - Common extra type descriptors (documentary, featurette, etc.)
+    /// - "featurette" label
     /// - Invalid filesystem characters (Windows, Linux, macOS compatible)
     /// </summary>
     public static string CleanupExtrasTitle(string title)
@@ -134,17 +132,9 @@ public class DvdDotComParser
         // Unicode quotes: U+2018 ('), U+2019 ('), U+201C ("), U+201D ("), U+00AB («), U+00BB (»)
         title = Regex.Replace(title, "[\"'\\u2018\\u2019\\u201C\\u201D\\u00AB\\u00BB]", "");
 
-        // Remove common extra type descriptors (case-insensitive)
-        var extraTypePatterns = new[]
-        {
-            @"\s+(documentary|featurette|short film|short|behind the scenes|making of|making-of|interview|commentary|deleted scenes?|deleted sequence|bonus feature|webisode|interactive|game|music video)\b",
-            @"^(documentary|featurette|short film|short|behind the scenes|making of|making-of|interview|commentary|deleted scenes?|deleted sequence|bonus feature|webisode|interactive|game|music video)\s+"
-        };
-
-        foreach (var pattern in extraTypePatterns)
-        {
-            title = Regex.Replace(title, pattern, "", RegexOptions.IgnoreCase);
-        }
+        // Remove "featurette" label only (case-insensitive)
+        title = Regex.Replace(title, @"\s+featurette\b", "", RegexOptions.IgnoreCase);
+        title = Regex.Replace(title, @"^featurette\s+", "", RegexOptions.IgnoreCase);
 
         // Remove invalid filesystem characters (Windows, Linux, macOS compatible)
         // Invalid for Windows: < > : " / \ | ? *

@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -18,36 +19,43 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
 {
     private readonly DvdDotComClient _dvdDotComClient = dvdDotComClient;
     private readonly FileHandler _fileHandler = fileHandler;
+    private CancellationTokenSource? _matchVideosOperationCancellationTokenSource;
     private List<DvdExtras> _currentExtras = new();
     private List<VideoMatch> _currentMatches = new();
     [ObservableProperty] private string _lookupResult = string.Empty;
-    
+
     [ObservableProperty] private string _title = string.Empty;
-    
+
     [ObservableProperty] private string _year = string.Empty;
 
     [ObservableProperty] private string _director = string.Empty;
-    
+
     [ObservableProperty] private ObservableCollection<DvdCompareResult> _items = new();
-    
+
     [ObservableProperty] private string _matchResults = string.Empty;
-    
+
+    [ObservableProperty] private int _videoCount = int.MaxValue;
+
     [ObservableProperty] private string _selectedDirectory = string.Empty;
-    
+
     [ObservableProperty] private string _selectedDvdTitle = string.Empty;
-    
+
     [ObservableProperty] private string _selectedDvdHref = string.Empty;
-    
+
     [ObservableProperty] private bool _isLookupInProgress = false;
-    
+
     [ObservableProperty] private bool _isDvdSelected = false;
-    
+
+    [ObservableProperty] private bool _isCancelButtonEnabled = false;
+
     [ObservableProperty] private bool _isMatchingInProgress = false;
-    
+
+    [ObservableProperty] private int _selectedMatchIndex = 0;
+
     [ObservableProperty] private bool _isRenameInProgress = false;
-    
+
     [ObservableProperty] private string _currentRenameStatus = string.Empty;
-    
+
     [ObservableProperty] private ObservableCollection<VideoMatchViewModel> _matchList = new();
 
     partial void OnIsLookupInProgressChanged(bool value)
@@ -91,14 +99,14 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
 
         IsLookupInProgress = true;
         LookupResult = "🔍 Searching for DVD...";
-        
+
         var formattedTitle = FormatTitleForSearch(Title);
         var lookupResult = await _dvdDotComClient.LookupDvdAsync(formattedTitle, Director, Year);
         var options = DvdDotComParser.GetLookupResults(lookupResult);
         Items = new ObservableCollection<DvdCompareResult>(options.ToList());
-        
+
         IsLookupInProgress = false;
-        
+
         if (Items.Count == 0)
         {
             LookupResult = $"❌ No DVD results found for '{Title}'{(string.IsNullOrEmpty(Year) ? "" : $" ({Year})")}";
@@ -120,7 +128,7 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
     {
         if (dvd == null)
             return;
-            
+
         // This command is fired when a button is clicked with the DVD info
         SelectedDvdTitle = dvd.Title;
         SelectedDvdHref = dvd.Href;
@@ -129,10 +137,10 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
         var details = await _dvdDotComClient.FetchDvdDetailsAsync(dvd.Href);
         var extras = DvdDotComParser.ParseExtras(details);
         _currentExtras = [.. extras];
-        
+
         IsLookupInProgress = false;
         IsDvdSelected = _currentExtras.Count > 0;
-        
+
         if (_currentExtras.Count > 0)
         {
             LookupResult = $"✅ Loaded {_currentExtras.Count} extra(s). You can now match videos.";
@@ -141,11 +149,20 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
         {
             LookupResult = "❌ No extras found for this DVD.";
         }
-        
+
         foreach (var item in _currentExtras)
         {
             Console.WriteLine(item);
         }
+    }
+
+    [RelayCommand]
+    private void CancelMatchOperation()
+    {
+        IsCancelButtonEnabled = false;
+        Console.WriteLine("Cancel Match Operation");
+        MatchResults += "🛑 Stopping Match Operation...";
+        _matchVideosOperationCancellationTokenSource?.Cancel();
     }
 
     /// <summary>
@@ -163,20 +180,28 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
             return;
         }
 
+        _matchVideosOperationCancellationTokenSource = new CancellationTokenSource();
+
         IsMatchingInProgress = true;
+        IsCancelButtonEnabled = true;
+        VideoCount = int.MaxValue;
+        SelectedMatchIndex = 0;
         SelectedDirectory = directoryPath;
-        MatchResults = "🔄 Scanning and matching videos...";
         MatchList.Clear();
         _currentMatches.Clear();
-        
+
         try
         {
             // Run matching on background thread to avoid blocking the UI
-            var matches = await Task.Run(async () =>
-            {
-                return await _fileHandler.MatchVideoFilesToExtrasAsync(directoryPath, _currentExtras, UpdateMatchProgress);
-            });
-            
+            var matches = await Task.Run(() =>
+                _fileHandler.MatchVideoFilesToExtrasAsync(
+                    directoryPath,
+                    _currentExtras,
+                    UpdateMatchProgress,
+                    _matchVideosOperationCancellationTokenSource.Token
+                )
+            );
+
             _currentMatches = matches;
 
             if (matches.Count == 0)
@@ -185,30 +210,47 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
             }
             else
             {
+                var collisionCount = matches.Count(m => m.HasCollision);
+                if (collisionCount > 0)
+                    MatchResults += $"\n⚠️ {collisionCount} match(es) have multiple title options (same duration). Pick the correct title from the list.";
                 MatchResults += $"\n✅ Found {matches.Count} match(es)!";
-                
+
                 // Build match list for UI
                 foreach (var match in matches)
                 {
                     var fileExtension = System.IO.Path.GetExtension(match.VideoFile);
-                    var extraTitleWithExtension = match.ExtraTitle + fileExtension;
-                    
-                    MatchList.Add(new VideoMatchViewModel
+                    var candidatesWithExt = match.CandidateExtraTitles.Select(t => t + fileExtension).ToList();
+                    var chosenWithExt = candidatesWithExt[0];
+
+                    var vm = new VideoMatchViewModel
                     {
                         VideoFile = match.VideoFile,
-                        ExtraTitle = extraTitleWithExtension,
+                        ExtraTitle = chosenWithExt,
+                        CandidateExtraTitles = new ObservableCollection<string>(candidatesWithExt),
+                        SelectedCandidateTitle = chosenWithExt,
                         VideoDuration = match.VideoDuration,
                         ExtraDuration = match.ExtraDuration,
                         DurationDifference = match.DurationDifference,
                         FullPath = match.FullPath,
                         RenameCommand = RenameVideoCommand
+                    };
+                    vm.SelectCandidateTitleCommand = new RelayCommand<string?>(title =>
+                    {
+                        if (!string.IsNullOrEmpty(title))
+                            vm.SelectedCandidateTitle = title;
                     });
+                    MatchList.Add(vm);
                 }
             }
+        }
+        catch (OperationCanceledException)
+        {
+            MatchResults += "\n⛔ Match operation cancelled.";
         }
         finally
         {
             IsMatchingInProgress = false;
+            IsCancelButtonEnabled = false;
         }
     }
 
@@ -231,17 +273,17 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
         IsRenameInProgress = true;
         CurrentRenameStatus = $"⏳ Processing: {match.VideoFile}...";
         Console.WriteLine($"🔄 Starting rename: {match.VideoFile} → {match.ExtraTitle}");
-        
+
         try
         {
             // Strip extension from ExtraTitle before passing to RenameVideoFile
             // (since RenameVideoFile adds the extension automatically)
             var extraTitleWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(match.ExtraTitle);
-            
+
             // Run the file operation on a background thread to avoid blocking the UI
-            var success = await Task.Run(() => 
+            var success = await Task.Run(() =>
             {
-                return _fileHandler.RenameVideoFile(match.FullPath, extraTitleWithoutExtension);
+                return FileHandler.RenameVideoFile(match.FullPath, extraTitleWithoutExtension);
             });
 
             if (success)
@@ -280,7 +322,7 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
         {
             // Build full URL from relative path
             var fullUrl = $"https://www.dvdcompare.net/comparisons/{SelectedDvdHref}";
-            
+
             // Open the URL in the default browser
             var psi = new System.Diagnostics.ProcessStartInfo
             {
@@ -295,9 +337,11 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
         }
     }
 
-    private void UpdateMatchProgress(string message)
+    private void UpdateMatchProgress(string message, int videoCount, int processed)
     {
         MatchResults += message;
+        VideoCount = videoCount;
+        SelectedMatchIndex = processed;
     }
 
     /// <summary>
@@ -334,8 +378,8 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
 }
 
 /// <summary>
-/// Represents a matched video file and its corresponding DVD extra title.
-/// Used in data binding for display and renaming operations in the UI.
+/// Represents a matched video file and its corresponding DVD extra title(s).
+/// When multiple extras share the same duration (collision), CandidateExtraTitles lists options for the user to pick.
 /// </summary>
 public class VideoMatchViewModel : ObservableObject
 {
@@ -353,11 +397,37 @@ public class VideoMatchViewModel : ObservableObject
         set => SetProperty(ref _extraTitle, value);
     }
 
+    /// <summary>All candidate extra titles (with extension) when duration matches multiple extras or videos.</summary>
+    private ObservableCollection<string> _candidateExtraTitles = new();
+    public ObservableCollection<string> CandidateExtraTitles
+    {
+        get => _candidateExtraTitles;
+        set
+        {
+            if (SetProperty(ref _candidateExtraTitles, value ?? new ObservableCollection<string>()))
+                OnPropertyChanged(nameof(HasCollision));
+        }
+    }
+
+    /// <summary>Selected candidate for binding to ComboBox; updates ExtraTitle when changed.</summary>
+    private string? _selectedCandidateTitle;
+    public string? SelectedCandidateTitle
+    {
+        get => _selectedCandidateTitle ?? ExtraTitle;
+        set
+        {
+            if (SetProperty(ref _selectedCandidateTitle, value) && !string.IsNullOrEmpty(value))
+                ExtraTitle = value;
+        }
+    }
+
+    public bool HasCollision => CandidateExtraTitles.Count > 1;
+
     public double VideoDuration { get; set; }
     public string ExtraDuration { get; set; } = string.Empty;
     public double DurationDifference { get; set; }
     public string FullPath { get; set; } = string.Empty;
-    
+
     private bool _isRenamed = false;
     public bool IsRenamed
     {
@@ -376,4 +446,7 @@ public class VideoMatchViewModel : ObservableObject
     public double ButtonVisibility => IsRenamed ? 0.3 : 1.0;
 
     public IAsyncRelayCommand<VideoMatchViewModel>? RenameCommand { get; set; }
+
+    /// <summary>Sets the selected title when user picks from the dropdown list (collision case).</summary>
+    public IRelayCommand<string?>? SelectCandidateTitleCommand { get; set; }
 }
