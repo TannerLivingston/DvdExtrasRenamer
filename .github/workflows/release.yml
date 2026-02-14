@@ -37,13 +37,11 @@ jobs:
       - name: Publish
         shell: bash
         run: |
-          OUTPUT_DIR=release-${{ matrix.rid }}
-
           dotnet publish ./DvdExtrasRenamer/DvdExtrasRenamer.csproj \
             -c Release \
             -r ${{ matrix.rid }} \
             --self-contained true \
-            -o $OUTPUT_DIR \
+            -o release-${{ matrix.rid }} \
             -p:PublishSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true \
             -p:DebugType=None \
@@ -53,45 +51,39 @@ jobs:
             -p:FileVersion=${VERSION} \
             -p:InformationalVersion=${VERSION}
 
-      - name: Create zip
-        uses: thedoctor0/zip-release@v0.7.1
-        with:
-          type: 'zip'
-          filename: DvdExtrasRenamer-${{ env.VERSION }}-${{ matrix.rid }}.zip
-          directory: release-${{ matrix.rid }}
-
-      - name: Generate checksum
-        shell: bash
-        run: |
-          FILE=DvdExtrasRenamer-${VERSION}-${{ matrix.rid }}.zip
-          if command -v sha256sum > /dev/null; then
-            sha256sum $FILE > $FILE.sha256
-          else
-            shasum -a 256 $FILE > $FILE.sha256
-          fi
-
       - uses: actions/upload-artifact@v4
         with:
-          name: DvdExtrasRenamer-${{ matrix.rid }}
-          path: |
-            DvdExtrasRenamer-${{ env.VERSION }}-${{ matrix.rid }}.zip
-            DvdExtrasRenamer-${{ env.VERSION }}-${{ matrix.rid }}.zip.sha256
+          name: build-${{ matrix.rid }}
+          path: release-${{ matrix.rid }}
 
   release:
     needs: build
     runs-on: ubuntu-latest
 
     steps:
+      - name: Extract version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Flatten artifacts
+      - name: Create zips and checksums
         run: |
           mkdir release-files
-          find artifacts -type f -exec cp {} release-files/ \;
 
-      - name: Create Release
+          for dir in artifacts/build-*; do
+            RID=$(basename "$dir" | sed 's/build-//')
+            ZIP_NAME=DvdExtrasRenamer-${VERSION}-${RID}.zip
+
+            cd "$dir"
+            zip -r "../../release-files/$ZIP_NAME" .
+            cd -
+
+            sha256sum release-files/$ZIP_NAME > release-files/$ZIP_NAME.sha256
+          done
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: release-files/*
