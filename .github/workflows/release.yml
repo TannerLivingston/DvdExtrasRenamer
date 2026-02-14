@@ -26,7 +26,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Extract version from tag
-        id: version
         shell: bash
         run: |
           VERSION=${GITHUB_REF_NAME#v}
@@ -39,31 +38,31 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Publish
-        run: >
-          dotnet publish
-          -c Release
-          -r ${{ matrix.rid }}
-          --self-contained true
-          /p:PublishSingleFile=true
-          /p:IncludeNativeLibrariesForSelfExtract=true
-          /p:DebugType=None
-          /p:DebugSymbols=false
-          /p:Version=${{ env.VERSION }}
-          /p:AssemblyVersion=${{ env.VERSION }}
-          /p:FileVersion=${{ env.VERSION }}
-          /p:InformationalVersion=${{ env.VERSION }}
+        run: |
+          dotnet publish ./DvdExtrasRenamer.csproj \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            --self-contained true \
+            -o publish \
+            /p:PublishSingleFile=true \
+            /p:IncludeNativeLibrariesForSelfExtract=true \
+            /p:DebugType=None \
+            /p:DebugSymbols=false \
+            /p:Version=${VERSION} \
+            /p:AssemblyVersion=${VERSION} \
+            /p:FileVersion=${VERSION} \
+            /p:InformationalVersion=${VERSION}
 
       - name: Zip output
         shell: bash
         run: |
-          cd bin/Release/net10.0/${{ matrix.rid }}/publish
-          zip -r ../../../DvdExtrasRenamer-${VERSION}-${{ matrix.rid }}.zip .
+          zip -r DvdExtrasRenamer-${VERSION}-${{ matrix.rid }}.zip publish
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: DvdExtrasRenamer-${{ matrix.rid }}
-          path: bin/Release/DvdExtrasRenamer-${{ env.VERSION }}-${{ matrix.rid }}.zip
+          path: DvdExtrasRenamer-${{ env.VERSION }}-${{ matrix.rid }}.zip
 
   release:
     needs: build
