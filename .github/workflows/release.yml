@@ -1,4 +1,4 @@
-name: Build and Release
+name: Release
 
 on:
   push:
@@ -25,70 +25,92 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Extract version
-        shell: bash
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - uses: actions/setup-dotnet@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: 8.0.x
 
       - name: Publish
-        shell: bash
         run: |
           dotnet publish ./DvdExtrasRenamer/DvdExtrasRenamer.csproj \
             -c Release \
             -r ${{ matrix.rid }} \
             --self-contained true \
-            -o release-${{ matrix.rid }} \
             -p:PublishSingleFile=true \
-            -p:IncludeNativeLibrariesForSelfExtract=true \
-            -p:DebugType=None \
-            -p:DebugSymbols=false \
-            -p:Version=${VERSION} \
-            -p:AssemblyVersion=${VERSION} \
-            -p:FileVersion=${VERSION} \
-            -p:InformationalVersion=${VERSION}
+            -o publish
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: build-${{ matrix.rid }}
-          path: release-${{ matrix.rid }}
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Extract version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
-
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Create zips and checksums
+      # ==============================
+      # WINDOWS & LINUX ZIP
+      # ==============================
+      - name: Zip (Windows)
+        if: runner.os == 'Windows'
         run: |
-          mkdir release-files
+          Compress-Archive -Path publish/* -DestinationPath DvdExtrasRenamer-${{ github.ref_name }}-${{ matrix.rid }}.zip
 
-          for dir in artifacts/build-*; do
-            RID=$(basename "$dir" | sed 's/build-//')
-            ZIP_NAME=DvdExtrasRenamer-${VERSION}-${RID}.zip
+      - name: Zip (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd publish
+          zip -r ../DvdExtrasRenamer-${{ github.ref_name }}-${{ matrix.rid }}.zip .
 
-            cd "$dir"
-            zip -r "../../release-files/$ZIP_NAME" .
-            cd -
+      # ==============================
+      # MACOS .APP BUNDLE
+      # ==============================
+      - name: Create macOS .app bundle
+        if: runner.os == 'macOS'
+        run: |
+          APP_NAME=DvdExtrasRenamer
+          VERSION=${{ github.ref_name }}
 
-            sha256sum release-files/$ZIP_NAME > release-files/$ZIP_NAME.sha256
-          done
+          mkdir -p "$APP_NAME.app/Contents/MacOS"
+          mkdir -p "$APP_NAME.app/Contents/Resources"
 
-      - name: Create GitHub Release
+          mv publish/$APP_NAME "$APP_NAME.app/Contents/MacOS/$APP_NAME"
+
+          cat > "$APP_NAME.app/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+           "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>$APP_NAME</string>
+              <key>CFBundleDisplayName</key>
+              <string>$APP_NAME</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.yourname.dvdextrasrenamer</string>
+              <key>CFBundleVersion</key>
+              <string>$VERSION</string>
+              <key>CFBundleShortVersionString</key>
+              <string>$VERSION</string>
+              <key>CFBundleExecutable</key>
+              <string>$APP_NAME</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>11.0</string>
+          </dict>
+          </plist>
+          EOF
+
+          chmod +x "$APP_NAME.app/Contents/MacOS/$APP_NAME"
+
+      - name: Zip macOS app
+        if: runner.os == 'macOS'
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            DvdExtrasRenamer.app \
+            DvdExtrasRenamer-${{ github.ref_name }}-${{ matrix.rid }}.zip
+
+      # ==============================
+      # UPLOAD ARTIFACT
+      # ==============================
+      - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         with:
-          files: release-files/*
+          files: DvdExtrasRenamer-${{ github.ref_name }}-${{ matrix.rid }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
