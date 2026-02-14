@@ -25,13 +25,11 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Publish
         run: |
@@ -42,23 +40,20 @@ jobs:
             -p:PublishSingleFile=true \
             -o publish
 
-      # ==============================
-      # WINDOWS & LINUX ZIP
-      # ==============================
+      # Windows ZIP
       - name: Zip (Windows)
         if: runner.os == 'Windows'
         run: |
           Compress-Archive -Path publish/* -DestinationPath DvdExtrasRenamer-${{ github.ref_name }}-${{ matrix.rid }}.zip
 
+      # Linux ZIP
       - name: Zip (Linux)
         if: runner.os == 'Linux'
         run: |
           cd publish
           zip -r ../DvdExtrasRenamer-${{ github.ref_name }}-${{ matrix.rid }}.zip .
 
-      # ==============================
-      # MACOS .APP BUNDLE
-      # ==============================
+      # macOS .app bundle
       - name: Create macOS .app bundle
         if: runner.os == 'macOS'
         run: |
@@ -105,12 +100,25 @@ jobs:
             DvdExtrasRenamer.app \
             DvdExtrasRenamer-${{ github.ref_name }}-${{ matrix.rid }}.zip
 
-      # ==============================
-      # UPLOAD ARTIFACT
-      # ==============================
-      - name: Upload Release Asset
+      # Upload artifact (NOT release)
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DvdExtrasRenamer-${{ matrix.rid }}
+          path: DvdExtrasRenamer-${{ github.ref_name }}-${{ matrix.rid }}.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: DvdExtrasRenamer-${{ github.ref_name }}-${{ matrix.rid }}.zip
+          files: artifacts/**/**/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
