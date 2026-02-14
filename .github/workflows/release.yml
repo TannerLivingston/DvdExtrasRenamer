@@ -97,9 +97,12 @@ jobs:
       - name: Zip macOS app
         if: runner.os == 'macOS'
         run: |
+          xattr -cr DvdExtrasRenamer.app
+
           ditto -c -k --sequesterRsrc --keepParent \
             DvdExtrasRenamer.app \
             DvdExtrasRenamer-${{ github.ref_name }}-${{ matrix.rid }}.zip
+
 
       # Upload artifact (NOT release)
       - name: Upload artifact
