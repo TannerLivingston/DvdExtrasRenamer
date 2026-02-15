@@ -2,10 +2,6 @@
 
 Thank you for your interest in contributing to DVD Extras Renamer! This document provides guidelines and instructions for contributing to the project.
 
-## Code of Conduct
-
-This project adheres to the Contributor Covenant Code of Conduct. By participating, you are expected to uphold this code. Please report unacceptable behavior to the project maintainers.
-
 ## How to Contribute
 
 ### Reporting Bugs
@@ -65,8 +61,6 @@ Open an issue with the label `enhancement`. Describe:
 ### Prerequisites
 
 - **.NET 10 SDK** ([download](https://dotnet.microsoft.com/download/dotnet/10.0))
-- **Git**
-- Text editor or IDE (Visual Studio, VS Code, or Rider recommended)
 
 ### Building
 
@@ -104,48 +98,6 @@ DvdExtrasRenamer/
 └── App.axaml*          # Application configuration
 ```
 
-## Code Style Guidelines
-
-### C# Conventions
-
-- **Naming**: Follow C# naming conventions
-  - Classes, methods, properties: `PascalCase`
-  - Private fields, local variables: `_camelCase` or `camelCase`
-  - Constants: `UPPER_CASE` (or `PascalCase` if common in codebase)
-- **Spacing**: Use 4 spaces for indentation (configured in .editorconfig)
-- **Line Length**: Keep lines under 120 characters when reasonable
-- **Comments**: Use `//` for inline comments, `///` for XML documentation
-
-### XML Documentation
-
-All public classes, methods, and properties should have XML documentation comments:
-
-```csharp
-/// <summary>
-/// Brief one-line description.
-/// </summary>
-/// <param name="paramName">Description of parameter</param>
-/// <returns>Description of return value</returns>
-public async Task<string> ExampleMethodAsync(string paramName)
-{
-    // Implementation
-}
-```
-
-### Async/Await
-
-- Use `async`/`await` for I/O operations (HTTP, file access)
-- Method names ending in operations should end with `Async`
-- Avoid `.Result` or `.Wait()` - use `await` instead
-- Use `Task.Run()` for long-running CPU-bound operations on the UI thread
-
-### Error Handling
-
-- Include try-catch blocks for operations that may fail
-- Log errors to Console in debug scenarios
-- Provide user-friendly error messages in the UI
-- Don't suppress exceptions silently
-
 ## Testing Recommendations
 
 Before submitting a PR, please test:
@@ -155,14 +107,12 @@ Before submitting a PR, please test:
    - [ ] Test with article-prefixed titles (The, A, An)
    - [ ] Match videos in directories with different video formats
    - [ ] Rename files and verify filesystem integrity
-   - [ ] Test on different OS (Windows/macOS/Linux if possible)
 
 2. **Error Cases**:
    - [ ] Invalid directory paths
    - [ ] No videos in directory
    - [ ] Duplicate filenames
    - [ ] No matches found
-   - [ ] Network errors during lookup
 
 ## Pull Request Process
 
@@ -173,37 +123,6 @@ Before submitting a PR, please test:
 5. Respond to feedback promptly
 6. Once approved, squash commits if requested
 7. Maintainer will merge
-
-## Areas for Contribution
-
-### High Priority
-
-- [ ] Unit and integration tests
-- [ ] Command-line interface version
-- [ ] Configuration file support (save recent searches, preferences)
-- [ ] Better error recovery and user guidance
-
-### Medium Priority
-
-- [ ] Subtitle file handling/renaming
-- [ ] Additional metadata sources beyond DVD.com
-- [ ] Batch directory processing
-- [ ] File preview/confirmation before renaming
-- [ ] Undo functionality
-
-### Nice to Have
-
-- [ ] Internationalization (i18n)
-- [ ] Dark/light theme toggle
-- [ ] Custom title formatting rules
-- [ ] Regular expression-based matching
-- [ ] Database caching of DVD info
-
-## Getting Help
-
-- **Questions**: Open a discussion or issue
-- **Documentation**: Check the README and code comments
-- **Examples**: Look at existing code in Models/ and ViewModels/
 
 ## License
 
