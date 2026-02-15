@@ -2,7 +2,7 @@
 
 A cross-platform desktop application built with Avalonia that automatically matches and renames video files in your DVD extras directories based on metadata from [dvdcompare.net](https://www.dvdcompare.net).
 
-I wanted to make it easier to identify and rename the bonus features that I rip off my disks with [MakeMKV](https://www.makemkv.com/). This is easier than manually checking the length of each extra that comes off the disk and comparing it against the list of titles found online. Maybe someone else will find it useful too.
+I wanted to make it easier to identify and rename the bonus features that I rip off my disks with [MakeMKV](https://www.makemkv.com/) for my Jellyfin server. This is easier than manually checking the length of each extra that comes off the disk and comparing it against the list of titles found online. Maybe someone else will find it useful too.
 
 https://github.com/user-attachments/assets/008e6c3b-e9d7-471e-ac8b-52ef43f66cc5
 
