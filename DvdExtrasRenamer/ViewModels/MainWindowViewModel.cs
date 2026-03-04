@@ -232,12 +232,32 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
                         ExtraDuration = match.ExtraDuration,
                         DurationDifference = match.DurationDifference,
                         FullPath = match.FullPath,
+                        IsCloseMatch = match.IsCloseMatch,
+                        CloseMatchDurations = match.CloseMatchDurations,
+                        EditableTitle = chosenWithExt,
                         RenameCommand = RenameVideoCommand
                     };
                     vm.SelectCandidateTitleCommand = new RelayCommand<string?>(title =>
                     {
                         if (!string.IsNullOrEmpty(title))
                             vm.SelectedCandidateTitle = title;
+                    });
+                    vm.ToggleEditTitleCommand = new RelayCommand(() =>
+                    {
+                        if (!vm.IsEditingTitle)
+                        {
+                            // Entering edit mode: sync EditableTitle with current ExtraTitle
+                            vm.EditableTitle = vm.ExtraTitle;
+                        }
+                        vm.IsEditingTitle = !vm.IsEditingTitle;
+                    });
+                    vm.SaveEditedTitleCommand = new RelayCommand(() =>
+                    {
+                        if (!string.IsNullOrEmpty(vm.EditableTitle))
+                        {
+                            vm.ExtraTitle = vm.EditableTitle;
+                        }
+                        vm.IsEditingTitle = false;
                     });
                     MatchList.Add(vm);
                 }
@@ -278,6 +298,7 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
         {
             // Strip extension from ExtraTitle before passing to RenameVideoFile
             // (since RenameVideoFile adds the extension automatically)
+            // For close matches, the duration is stored separately in CloseMatchDurations, not in the title
             var extraTitleWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(match.ExtraTitle);
 
             // Run the file operation on a background thread to avoid blocking the UI
@@ -380,6 +401,7 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
 /// <summary>
 /// Represents a matched video file and its corresponding DVD extra title(s).
 /// When multiple extras share the same duration (collision), CandidateExtraTitles lists options for the user to pick.
+/// When IsCloseMatch is true, the match is based on nearest duration (not exact ±1 second match).
 /// </summary>
 public class VideoMatchViewModel : ObservableObject
 {
@@ -421,7 +443,67 @@ public class VideoMatchViewModel : ObservableObject
         }
     }
 
+    private bool _isCloseMatch = false;
+    public bool IsCloseMatch
+    {
+        get => _isCloseMatch;
+        set => SetProperty(ref _isCloseMatch, value);
+    }
+
+    /// <summary>True if this is a close match (no exact match within ±1 second found).</summary>
+    public bool ShowCloseMatchWarning => IsCloseMatch;
+
+    private bool _isEditingTitle = false;
+    public bool IsEditingTitle
+    {
+        get => _isEditingTitle;
+        set => SetProperty(ref _isEditingTitle, value);
+    }
+
+    private string _editableTitle = string.Empty;
+    public string EditableTitle
+    {
+        get => _editableTitle;
+        set => SetProperty(ref _editableTitle, value);
+    }
+
+    /// <summary>For close matches only: stores the duration differences for each candidate (readonly display).</summary>
+    private List<double>? _closeMatchDurations;
+    public List<double>? CloseMatchDurations
+    {
+        get => _closeMatchDurations;
+        set
+        {
+            if (SetProperty(ref _closeMatchDurations, value))
+                UpdateCloseMatchDisplayStrings();
+        }
+    }
+
+    /// <summary>For close matches: formatted strings showing title + duration (for dropdown display).</summary>
+    private ObservableCollection<string> _closeMatchDisplayStrings = new();
+    public ObservableCollection<string> CloseMatchDisplayStrings
+    {
+        get => _closeMatchDisplayStrings;
+        set => SetProperty(ref _closeMatchDisplayStrings, value);
+    }
+
+    private void UpdateCloseMatchDisplayStrings()
+    {
+        CloseMatchDisplayStrings.Clear();
+        if (CloseMatchDurations != null && CloseMatchDurations.Count > 0)
+        {
+            for (int i = 0; i < CandidateExtraTitles.Count && i < CloseMatchDurations.Count; i++)
+            {
+                var displayText = $"{CandidateExtraTitles[i]}  [off by {CloseMatchDurations[i]:F1}s]";
+                CloseMatchDisplayStrings.Add(displayText);
+            }
+        }
+    }
+
     public bool HasCollision => CandidateExtraTitles.Count > 1;
+
+    /// <summary>True only for exact match collisions (same duration, multiple extras). Not for close matches.</summary>
+    public bool ShowExactMatchCollisionDropdown => HasCollision && !IsCloseMatch;
 
     public double VideoDuration { get; set; }
     public string ExtraDuration { get; set; } = string.Empty;
@@ -449,4 +531,10 @@ public class VideoMatchViewModel : ObservableObject
 
     /// <summary>Sets the selected title when user picks from the dropdown list (collision case).</summary>
     public IRelayCommand<string?>? SelectCandidateTitleCommand { get; set; }
+
+    /// <summary>Toggles edit mode and syncs EditableTitle with ExtraTitle.</summary>
+    public IRelayCommand? ToggleEditTitleCommand { get; set; }
+
+    /// <summary>Saves the edited title back to ExtraTitle.</summary>
+    public IRelayCommand? SaveEditedTitleCommand { get; set; }
 }

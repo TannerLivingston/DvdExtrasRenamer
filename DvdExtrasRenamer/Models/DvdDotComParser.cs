@@ -76,17 +76,31 @@ public class DvdDotComParser
 
         foreach (var extrasNode in extrasNodes)
         {
-            var text = Normalize(HtmlEntity.DeEntitize(extrasNode.InnerText));
+            var text = HtmlEntity.DeEntitize(extrasNode.InnerText);
+            
+            // Split by newlines to handle each item separately
+            // This prevents grouping unrelated items together
+            var lines = Regex.Split(text, @"\r\n|\r|\n");
 
-            // Match: Any text followed by time in parentheses (mm:ss) or (hh:mm:ss)
-            // Examples: "Title" documentary (58:58), "Sub-title" featurette (5:26)
-            var matches = Regex.Matches(
-                text,
-                @"(.*?)\s*\((\d{1,2}:\d{2}(?::\d{2})?)\)"
-            );
-
-            foreach (Match match in matches)
+            foreach (var line in lines)
             {
+                var normalizedLine = Normalize(line);
+                
+                // Skip lines that don't contain a time format - these aren't videos
+                // Examples to skip: "Design Gallery (17 pages)", "(5 photos)", etc.
+                if (!Regex.IsMatch(normalizedLine, @"\(\d{1,2}:\d{2}(?::\d{2})?\)"))
+                    continue;
+
+                // Match: Any text followed by time in parentheses (mm:ss) or (hh:mm:ss)
+                // Examples: "Title" documentary (58:58), "Sub-title" featurette (5:26)
+                var match = Regex.Match(
+                    normalizedLine,
+                    @"(.*?)\s*\((\d{1,2}:\d{2}(?::\d{2})?)\)"
+                );
+
+                if (!match.Success)
+                    continue;
+
                 var title = match.Groups[1].Value.Trim();
                 var duration = match.Groups[2].Value;
 
@@ -119,6 +133,7 @@ public class DvdDotComParser
 
     /// <summary>
     /// Cleans up extras titles for display and filesystem use by removing:
+    /// - Non-video parentheses like "(17 pages)" or "(5 photos)"
     /// - Quote marks (single and double)
     /// - "featurette" label
     /// - Invalid filesystem characters (Windows, Linux, macOS compatible)
@@ -127,6 +142,11 @@ public class DvdDotComParser
     {
         if (string.IsNullOrWhiteSpace(title))
             return string.Empty;
+
+        // Remove non-video parentheses: anything in () that doesn't contain a time format (MM:SS or HH:MM:SS)
+        // This filters out things like "(17 pages)", "(5 photos)", etc., keeping only time-based parentheses
+        // Negative lookahead (?!\d{1,2}:\d{2}) ensures we skip time-format parentheses
+        title = Regex.Replace(title, @"\((?!\d{1,2}:\d{2})([^)]*)\)", "");
 
         // Remove quote marks (including Unicode variants: regular, curly, guillemets, etc.)
         // Unicode quotes: U+2018 ('), U+2019 ('), U+201C ("), U+201D ("), U+00AB («), U+00BB (»)

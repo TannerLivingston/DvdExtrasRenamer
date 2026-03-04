@@ -1,11 +1,13 @@
 using System;
 using System.ComponentModel;
+using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using DvdExtrasRenamer.ViewModels;
 
 namespace DvdExtrasRenamer.Views;
@@ -55,6 +57,33 @@ public partial class MainWindow : Window
         // Selection is already bound to SelectedCandidateTitle; close the flyout when user picks
         if (sender is ListBox listBox && listBox.Tag is PopupFlyoutBase popupFlyout)
             popupFlyout.Hide();
+    }
+
+    private void CloseMatchListBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        // When user selects a close match display string, map it back to the clean title
+        if (sender is ListBox listBox)
+        {
+            var selectedIndex = listBox.SelectedIndex;
+            if (selectedIndex >= 0 && listBox.Tag is ObservableCollection<string> cleanTitles && selectedIndex < cleanTitles.Count)
+            {
+                // Find the parent to access the ViewModel and update ExtraTitle with clean title (without duration badge)
+                var parent = listBox.Parent as Control;
+                while (parent != null && parent is not Grid { DataContext: VideoMatchViewModel })
+                {
+                    parent = parent.Parent as Control;
+                }
+                
+                if (parent?.DataContext is VideoMatchViewModel vm)
+                {
+                    vm.ExtraTitle = cleanTitles[selectedIndex];
+                }
+
+                // Close the flyout
+                var flyout = listBox.FindAncestorOfType<PopupFlyoutBase>();
+                flyout?.Hide();
+            }
+        }
     }
 
     private async void OpenFileButton_Clicked(object sender, RoutedEventArgs e)

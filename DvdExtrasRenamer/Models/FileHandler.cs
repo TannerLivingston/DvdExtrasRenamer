@@ -110,7 +110,31 @@ public class FileHandler
 
             if (candidateExtras.Count == 0)
             {
-                onProgress?.Invoke($" - No matches found\n", 0, 0);
+                // Find multiple closest matches for suggestion (top 5)
+                var closeMatches = FindClosestMatches(duration.Value, extras, topCount: 5);
+                
+                if (closeMatches.Count > 0)
+                {
+                    // Store clean titles and durations separately (not combined in the title)
+                    var candidateTitles = closeMatches.Select(m => m.Title).ToList();
+                    var closeMatchDurations = closeMatches.Select(m => m.Diff).ToList();
+                    
+                    onProgress?.Invoke($" - No exact match found. Showing closest options:\n", 0, 0);
+                    matches.Add(new VideoMatch(
+                        VideoFile: videoFile.Name,
+                        CandidateExtraTitles: candidateTitles,
+                        VideoDuration: duration.Value,
+                        ExtraDuration: closeMatches[0].Duration, // First (closest) option's duration
+                        DurationDifference: closeMatches[0].Diff,
+                        FullPath: videoFile.FullName,
+                        IsCloseMatch: true,
+                        CloseMatchDurations: closeMatchDurations
+                    ));
+                }
+                else
+                {
+                    onProgress?.Invoke($" - No matches found\n", 0, 0);
+                }
             }
             else
             {
@@ -126,7 +150,8 @@ public class FileHandler
                     VideoDuration: duration.Value,
                     ExtraDuration: first.Duration,
                     DurationDifference: first.Diff,
-                    FullPath: videoFile.FullName
+                    FullPath: videoFile.FullName,
+                    IsCloseMatch: false
                 ));
             }
         }
@@ -236,6 +261,27 @@ public class FileHandler
 
         return false;
     }
+
+    /// <summary>
+    /// Finds the closest N matches (by duration difference) from the list of all extras.
+    /// Returns titles, duration strings, and differences sorted by smallest difference first.
+    /// </summary>
+    private static List<(string Title, string Duration, double Diff)> FindClosestMatches(double videoDuration, List<DvdExtras> extras, int topCount = 5)
+    {
+        var matches = new List<(string Title, string Duration, double Diff)>();
+
+        foreach (var extra in extras)
+        {
+            if (TryParseDuration(extra.Duration, out var extraDuration))
+            {
+                var diff = Math.Abs(videoDuration - extraDuration);
+                matches.Add((extra.Title, extra.Duration, diff));
+            }
+        }
+
+        // Sort by smallest difference first and return top N
+        return matches.OrderBy(m => m.Diff).Take(topCount).ToList();
+    }
 }
 
 public record VideoMatch(
@@ -244,7 +290,9 @@ public record VideoMatch(
     double VideoDuration,
     string ExtraDuration,
     double DurationDifference,
-    string FullPath = ""
+    string FullPath = "",
+    bool IsCloseMatch = false,
+    List<double>? CloseMatchDurations = null
 )
 {
     /// <summary>First candidate title for display; use CandidateExtraTitles for full list and user choice.</summary>

@@ -236,7 +236,7 @@
                 <!-- Progress/Log TextBox (auto-scrolls to latest when MatchResults updates) -->
                 <ScrollViewer x:Name="ProgressScrollViewer" Height="150" BorderBrush="#D0D0D0" BorderThickness="1"
                               Background="White">
-                    <TextBlock Name="ProgressTextBlock"
+                    <SelectableTextBlock Name="ProgressTextBlock"
                                Text="{Binding MatchResults}"
                                TextWrapping="Wrap"
                                FontSize="11"
@@ -247,11 +247,11 @@
 
                 <!-- Match List with Rename Buttons -->
                 <TextBlock Text="Matched Videos"
-                           FontSize="12"
-                           Margin="0,10,0,5"
-                           FontWeight="Bold"
-                           Foreground="#1A1A1A"
-                           IsVisible="{Binding MatchList.Count, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                     FontSize="12"
+                                     Margin="0,10,0,5"
+                                     FontWeight="Bold"
+                                     Foreground="#1A1A1A"
+                                     IsVisible="{Binding MatchList.Count, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
                 <ScrollViewer MaxHeight="300"
                               HorizontalScrollBarVisibility="Disabled"
@@ -292,11 +292,11 @@
 
                                         <!-- TARGET (flex column) -->
                                         <Grid Grid.Column="1"
-                                              ColumnDefinitions="Auto,*,Auto"
+                                              ColumnDefinitions="Auto,*,Auto,Auto"
                                               VerticalAlignment="Center"
                                               Margin="0,0,10,0">
 
-                                            <!-- Collision Badge -->
+                                            <!-- Collision/Close Match Badge -->
                                             <Border Grid.Column="0"
                                                     Background="#FFF3E0"
                                                     Padding="4,2"
@@ -310,45 +310,112 @@
                                                            FontWeight="SemiBold" />
                                             </Border>
 
-                                            <!-- Title -->
-                                            <TextBlock Grid.Column="1"
-                                                       Text="{Binding SelectedCandidateTitle}"
-                                                       FontSize="11"
-                                                       Foreground="#1A1A1A"
-                                                       VerticalAlignment="Center"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       IsVisible="{Binding HasCollision}" />
+                                            <Border Grid.Column="0"
+                                                    Background="#E1BEE7"
+                                                    Padding="4,2"
+                                                    CornerRadius="4"
+                                                    Margin="0,0,6,0"
+                                                    VerticalAlignment="Center"
+                                                    IsVisible="{Binding ShowCloseMatchWarning}">
+                                                <TextBlock Text="Close match"
+                                                           FontSize="9"
+                                                           Foreground="#6A1B9A"
+                                                           FontWeight="SemiBold" />
+                                            </Border>
 
+                                            <!-- Title Display (when not editing) -->
                                             <TextBlock Grid.Column="1"
                                                        Text="{Binding ExtraTitle}"
                                                        FontSize="11"
                                                        Foreground="#1A1A1A"
                                                        VerticalAlignment="Center"
                                                        TextTrimming="CharacterEllipsis"
-                                                       IsVisible="{Binding !HasCollision}" />
+                                                       IsVisible="{Binding !IsEditingTitle}" />
 
-                                            <!-- Dropdown -->
-                                            <Button Grid.Column="2"
-                                                    Content="▼"
-                                                    Padding="6,2"
-                                                    FontSize="10"
-                                                    Margin="6,0,0,0"
-                                                    IsEnabled="{Binding IsNotRenamed}"
-                                                    ToolTip.Tip="Choose title"
-                                                    Tag="{Binding .}"
-                                                    IsVisible="{Binding HasCollision}">
+                                            <!-- Title Edit TextBox (when editing) -->
+                                            <TextBox Grid.Column="1"
+                                                     Text="{Binding EditableTitle, Mode=TwoWay}"
+                                                     FontSize="11"
+                                                     Foreground="#1A1A1A"
+                                                     Padding="6,2"
+                                                     IsVisible="{Binding IsEditingTitle}">
+                                            </TextBox>
 
-                                                <Button.Flyout>
-                                                    <Flyout Placement="Bottom"
-                                                            Opened="TitlePickerFlyout_Opened">
-                                                        <ListBox MinWidth="200"
-                                                                 MaxHeight="220"
-                                                                 ItemsSource="{Binding CandidateExtraTitles}"
-                                                                 SelectedItem="{Binding SelectedCandidateTitle}"
-                                                                 SelectionChanged="TitlePickerListBox_SelectionChanged" />
-                                                    </Flyout>
-                                                </Button.Flyout>
-                                            </Button>
+                                            <!-- Dropdown and Edit Buttons -->
+                                            <StackPanel Grid.Column="2"
+                                                        Orientation="Horizontal"
+                                                        Spacing="4"
+                                                        VerticalAlignment="Center">
+
+                                                <!-- Title Dropdown (exact match collision case only) -->
+                                                <Button Content="▼"
+                                                        Padding="6,2"
+                                                        FontSize="10"
+                                                        IsEnabled="{Binding IsNotRenamed}"
+                                                        ToolTip.Tip="Choose title"
+                                                        Tag="{Binding .}"
+                                                        IsVisible="{Binding ShowExactMatchCollisionDropdown}">
+
+                                                    <Button.Flyout>
+                                                        <Flyout Placement="Bottom"
+                                                                Opened="TitlePickerFlyout_Opened">
+                                                            <ListBox MinWidth="200"
+                                                                     MaxHeight="220"
+                                                                     ItemsSource="{Binding CandidateExtraTitles}"
+                                                                     SelectedItem="{Binding SelectedCandidateTitle}"
+                                                                     SelectionChanged="TitlePickerListBox_SelectionChanged" />
+                                                        </Flyout>
+                                                    </Button.Flyout>
+                                                </Button>
+
+                                                <!-- Close Match Dropdown (shows titles with separate duration badges) -->
+                                                <Button Content="▼"
+                                                        Padding="6,2"
+                                                        FontSize="10"
+                                                        IsEnabled="{Binding IsNotRenamed}"
+                                                        ToolTip.Tip="Choose from closest matches"
+                                                        IsVisible="{Binding IsCloseMatch}">
+
+                                                    <Button.Flyout>
+                                                        <Flyout Placement="Bottom">
+                                                            <ListBox MinWidth="350"
+                                                                     MaxHeight="300"
+                                                                     ItemsSource="{Binding CloseMatchDisplayStrings}"
+                                                                     SelectionChanged="CloseMatchListBox_SelectionChanged"
+                                                                     Tag="{Binding CandidateExtraTitles}" />
+                                                        </Flyout>
+                                                    </Button.Flyout>
+                                                </Button>
+
+                                                <!-- Edit Title Button -->
+                                                <Button Content="✎"
+                                                        Padding="6,2"
+                                                        FontSize="10"
+                                                        IsEnabled="{Binding IsNotRenamed}"
+                                                        ToolTip.Tip="Edit title"
+                                                        Command="{Binding ToggleEditTitleCommand}"
+                                                        IsVisible="{Binding !IsEditingTitle}" />
+
+                                                <!-- Save Button (when editing) -->
+                                                <Button Content="✓"
+                                                        Padding="6,2"
+                                                        FontSize="10"
+                                                        Background="#34C759"
+                                                        Foreground="White"
+                                                        ToolTip.Tip="Save changes"
+                                                        Command="{Binding SaveEditedTitleCommand}"
+                                                        IsVisible="{Binding IsEditingTitle}" />
+
+                                                <!-- Cancel Button (when editing) -->
+                                                <Button Content="✕"
+                                                        Padding="6,2"
+                                                        FontSize="10"
+                                                        Background="#FF3B30"
+                                                        Foreground="White"
+                                                        ToolTip.Tip="Cancel editing"
+                                                        Command="{Binding ToggleEditTitleCommand}"
+                                                        IsVisible="{Binding IsEditingTitle}" />
+                                            </StackPanel>
                                         </Grid>
 
                                         <!-- RENAME BUTTON (ALWAYS RIGHT) -->
