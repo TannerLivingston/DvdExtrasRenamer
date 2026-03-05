@@ -56,7 +56,15 @@ public partial class MainWindow : Window
     {
         // Selection is already bound to SelectedCandidateTitle; close the flyout when user picks
         if (sender is ListBox listBox && listBox.Tag is PopupFlyoutBase popupFlyout)
+        {
             popupFlyout.Hide();
+            
+            // Refilter close matches to remove the newly-selected title from other dropdowns
+            if (DataContext is MainWindowViewModel mainVm)
+            {
+                mainVm.RemoveUsedTitlesFromCloseMatches();
+            }
+        }
     }
 
     private void CloseMatchListBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -82,6 +90,12 @@ public partial class MainWindow : Window
                 // Close the flyout
                 var flyout = listBox.FindAncestorOfType<PopupFlyoutBase>();
                 flyout?.Hide();
+                
+                // Refilter close matches to remove the newly-selected title from other dropdowns
+                if (DataContext is MainWindowViewModel mainVm)
+                {
+                    mainVm.RemoveUsedTitlesFromCloseMatches();
+                }
             }
         }
     }
@@ -109,6 +123,9 @@ public partial class MainWindow : Window
                 // Extract the parent directory name and populate Title/Year
                 if (this.DataContext is MainWindowViewModel viewModel)
                 {
+                    // Clear previous matching state when selecting a new directory
+                    viewModel.ClearMatchingState();
+                    
                     viewModel.SelectedDirectory = selectedPath;
                     
                     // Extract parent directory name (movie title)

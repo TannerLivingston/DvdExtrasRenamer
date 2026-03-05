@@ -175,7 +175,38 @@
                     </ItemsControl>
                 </ScrollViewer>
 
-                <!-- DVD Selection Status -->
+                <!-- Release Selection Section -->
+                <Border BorderBrush="#FF9500" BorderThickness="2" Padding="12" CornerRadius="4" Background="#FFF8F0"
+                        IsVisible="{Binding ShowReleaseSelection}">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="📀 Multiple Releases Found" FontWeight="Bold" FontSize="12" Foreground="#B24504" />
+                        <TextBlock Text="Please select the DVD release that matches your disc:" FontSize="11" Foreground="#333333" TextWrapping="Wrap" />
+                        <ScrollViewer MaxHeight="150" BorderBrush="#D0D0D0" BorderThickness="1" Background="White" CornerRadius="4">
+                            <ItemsControl ItemsSource="{Binding AvailableReleases}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Margin="4"
+                                                Padding="6,4"
+                                                FontSize="11"
+                                                Classes="dvdButton"
+                                                HorizontalContentAlignment="Center"
+                                                Command="{Binding DataContext.LoadReleaseExtrasCommand, RelativeSource={RelativeSource FindAncestor, AncestorType=Window}}"
+                                                CommandParameter="{Binding .}">
+                                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" />
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </StackPanel>
+                </Border>
+
+                <!-- DVD & Release Selection Status - displayed after all selection buttons -->
                 <Border BorderBrush="#34C759" BorderThickness="1" Padding="10" CornerRadius="4" Background="#F0F9F5"
                         IsVisible="{Binding IsDvdSelected}">
                     <StackPanel Spacing="8">
@@ -188,6 +219,10 @@
                                 FontSize="10" Cursor="Hand" Command="{Binding OpenDvdLinkCommand}" />
                     </StackPanel>
                 </Border>
+
+                <!-- Release Load Status -->
+                <TextBlock Name="ReleaseLoadStatusText" Text="{Binding ReleaseLoadStatus}" FontSize="11" Foreground="#666666"
+                           TextWrapping="Wrap" IsVisible="{Binding ReleaseLoadStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             </StackPanel>
 
             <!-- Match Results Section -->
@@ -296,7 +331,7 @@
                                               VerticalAlignment="Center"
                                               Margin="0,0,10,0">
 
-                                            <!-- Collision/Close Match Badge -->
+                                            <!-- Status Badges -->
                                             <Border Grid.Column="0"
                                                     Background="#FFF3E0"
                                                     Padding="4,2"
@@ -317,7 +352,7 @@
                                                     Margin="0,0,6,0"
                                                     VerticalAlignment="Center"
                                                     IsVisible="{Binding ShowCloseMatchWarning}">
-                                                <TextBlock Text="Close match"
+                                                <TextBlock Text="Unmatched"
                                                            FontSize="9"
                                                            Foreground="#6A1B9A"
                                                            FontWeight="SemiBold" />
@@ -368,12 +403,12 @@
                                                     </Button.Flyout>
                                                 </Button>
 
-                                                <!-- Close Match Dropdown (shows titles with separate duration badges) -->
+                                                <!-- Unmatched Options Dropdown (couldn't identify - select from available extras) -->
                                                 <Button Content="▼"
                                                         Padding="6,2"
                                                         FontSize="10"
                                                         IsEnabled="{Binding IsNotRenamed}"
-                                                        ToolTip.Tip="Choose from closest matches"
+                                                        ToolTip.Tip="Couldn't identify - select from available options"
                                                         IsVisible="{Binding IsCloseMatch}">
 
                                                     <Button.Flyout>

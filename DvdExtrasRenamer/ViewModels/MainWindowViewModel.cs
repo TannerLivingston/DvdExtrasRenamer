@@ -58,6 +58,14 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
 
     [ObservableProperty] private ObservableCollection<VideoMatchViewModel> _matchList = new();
 
+    [ObservableProperty] private ObservableCollection<DvdRelease> _availableReleases = new();
+
+    [ObservableProperty] private DvdRelease? _selectedRelease;
+
+    [ObservableProperty] private bool _showReleaseSelection = false;
+
+    [ObservableProperty] private string _releaseLoadStatus = string.Empty;
+
     partial void OnIsLookupInProgressChanged(bool value)
     {
         OnPropertyChanged(nameof(IsLookupNotInProgress));
@@ -120,7 +128,8 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
     /// <summary>
     /// Selects a DVD from search results and fetches its extras/bonus features.
     /// Triggers loading of DVD details page and parsing of extras.
-    /// Updates UI with selected DVD title and enables video matching.
+    /// If multiple releases are found, shows release selection UI.
+    /// If single release, auto-selects and loads extras.
     /// </summary>
     /// <param name="dvd">The DVD comparison result to select</param>
     [RelayCommand]
@@ -129,25 +138,81 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
         if (dvd == null)
             return;
 
-        // This command is fired when a button is clicked with the DVD info
         SelectedDvdTitle = dvd.Title;
         SelectedDvdHref = dvd.Href;
         IsLookupInProgress = true;
-        LookupResult = "🔍 Loading DVD extras...";
+        LookupResult = "🔍 Loading DVD release information...";
+        
         var details = await _dvdDotComClient.FetchDvdDetailsAsync(dvd.Href);
-        var extras = DvdDotComParser.ParseExtras(details);
-        _currentExtras = [.. extras];
+        var releases = DvdDotComParser.ParseReleases(details);
+        
+        Console.WriteLine($"[DEBUG] ParseReleases returned {releases.Count} releases");
+        foreach (var rel in releases)
+        {
+            Console.WriteLine($"  - {rel.Name}: {rel.Extras.Count} extras");
+        }
+
+        // If multiple releases found, show selection UI
+        if (releases.Count > 1)
+        {
+            AvailableReleases = new ObservableCollection<DvdRelease>(releases);
+            ShowReleaseSelection = true;
+            IsLookupInProgress = false;
+            ReleaseLoadStatus = "";  // Clear any previous status
+            LookupResult = $"📀 Found {releases.Count} different DVD releases. Please select the matching release.";
+            return;
+        }
+
+        // If single release or fallback, load its extras
+        var releaseToUse = releases.FirstOrDefault();
+        if (releaseToUse == null)
+        {
+            // Fallback: try single-release parsing
+            var extras = DvdDotComParser.ParseExtras(details);
+            releaseToUse = new DvdRelease { Name = dvd.Title, Extras = [.. extras] };
+            releases = [releaseToUse];
+        }
+
+        await LoadExtrasForRelease(releaseToUse);
+    }
+
+    /// <summary>
+    /// Loads extras from a specific DVD release and enables video matching.
+    /// Called after release selection or auto-selection.
+    /// </summary>
+    [RelayCommand]
+    private async Task LoadReleaseExtras(DvdRelease? release)
+    {
+        if (release == null)
+            return;
+
+        ShowReleaseSelection = false;
+        SelectedRelease = release;
+        await LoadExtrasForRelease(release);
+    }
+
+    /// <summary>
+    /// Helper method to load extras for a release and update UI state.
+    /// </summary>
+    private async Task LoadExtrasForRelease(DvdRelease release)
+    {
+        IsLookupInProgress = true;
+        ReleaseLoadStatus = "🔍 Loading DVD extras...";
+        
+        _currentExtras = [.. release.Extras];
+        await Task.Delay(100); // Brief delay to ensure UI update
 
         IsLookupInProgress = false;
         IsDvdSelected = _currentExtras.Count > 0;
 
         if (_currentExtras.Count > 0)
         {
-            LookupResult = $"✅ Loaded {_currentExtras.Count} extra(s). You can now match videos.";
+            var releaseInfo = string.IsNullOrEmpty(release.Name) ? "" : $" ({release.Name})";
+            ReleaseLoadStatus = $"✅ Loaded {_currentExtras.Count} extra(s){releaseInfo}. You can now match videos.";
         }
         else
         {
-            LookupResult = "❌ No extras found for this DVD.";
+            ReleaseLoadStatus = "❌ No extras found for this release.";
         }
 
         foreach (var item in _currentExtras)
@@ -256,6 +321,8 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
                         if (!string.IsNullOrEmpty(vm.EditableTitle))
                         {
                             vm.ExtraTitle = vm.EditableTitle;
+                            // Refilter after saving a manually-edited title
+                            RemoveUsedTitlesFromCloseMatches();
                         }
                         vm.IsEditingTitle = false;
                     });
@@ -271,7 +338,136 @@ public partial class MainWindowViewModel(DvdDotComClient dvdDotComClient, FileHa
         {
             IsMatchingInProgress = false;
             IsCancelButtonEnabled = false;
+            
+            // Post-process: Reassign duplicate default matches and filter close matches
+            ReassignDuplicateDefaults();
+            RemoveUsedTitlesFromCloseMatches();
         }
+    }
+
+    /// <summary>
+    /// Fixes cases where multiple videos have the same extra assigned as their default match.
+    /// Reassigns duplicates to use different options from their candidate lists.
+    /// </summary>
+    private void ReassignDuplicateDefaults()
+    {
+        // Find all videos with unmatched extras that have duplicate default assignments
+        var unmatched = MatchList.Where(m => m.IsCloseMatch).ToList();
+        if (unmatched.Count == 0)
+            return;
+
+        // Track which titles are already assigned as defaults
+        var assignedDefaults = new HashSet<string>(
+            MatchList
+                .Where(m => !m.IsCloseMatch)  // Exact matches
+                .Select(m => m.ExtraTitle)
+                .Where(t => !string.IsNullOrEmpty(t))
+        );
+
+        // For each unmatched video, check if its default is already assigned
+        for (int i = 0; i < unmatched.Count; i++)
+        {
+            var vm = unmatched[i];
+            var currentDefault = vm.ExtraTitle;
+
+            // If this default is already assigned elsewhere, find a different option
+            if (assignedDefaults.Contains(currentDefault))
+            {
+                Console.WriteLine($"[DEBUG] Duplicate default for {vm.VideoFile}: {currentDefault}");
+                
+                // Find first unassigned candidate
+                var nextAvailable = vm.CandidateExtraTitles.FirstOrDefault(c => !assignedDefaults.Contains(c));
+                
+                if (nextAvailable != null)
+                {
+                    Console.WriteLine($"[DEBUG] Reassigning {vm.VideoFile} to {nextAvailable}");
+                    vm.ExtraTitle = nextAvailable;
+                    vm.SelectedCandidateTitle = nextAvailable;
+                    vm.EditableTitle = nextAvailable;
+                    assignedDefaults.Add(nextAvailable);
+                }
+            }
+            else
+            {
+                assignedDefaults.Add(currentDefault);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Filters close match dropdown options to exclude extras that are already matched 
+    /// (as exact matches) for other videos. This prevents duplicate selections.
+    /// </summary>
+    public void RemoveUsedTitlesFromCloseMatches()
+    {
+        // Get all currently selected extra titles (exact matches)
+        var usedTitles = new HashSet<string>(
+            MatchList
+                .Where(m => !m.IsCloseMatch)  // Only consider exact matches
+                .Select(m => m.ExtraTitle)
+                .Where(t => !string.IsNullOrEmpty(t))
+        );
+
+        if (usedTitles.Count == 0)
+            return;  // No exact matches yet, nothing to filter
+
+        // For each video with close matches, remove titles that are already used
+        foreach (var match in MatchList.Where(m => m.IsCloseMatch))
+        {
+            var originalCount = match.CandidateExtraTitles.Count;
+            
+            // Filter out used titles
+            var availableTitles = match.CandidateExtraTitles
+                .Where(title => !usedTitles.Contains(title))
+                .ToList();
+
+            if (availableTitles.Count == originalCount)
+                continue;  // No filtering needed for this match
+
+            // Update the candidate list
+            match.CandidateExtraTitles.Clear();
+            foreach (var title in availableTitles)
+            {
+                match.CandidateExtraTitles.Add(title);
+            }
+
+            // Filter durations to match the filtered titles
+            if (match.CloseMatchDurations != null && availableTitles.Count > 0)
+            {
+                // Keep only the first N durations (where N is the number of available titles)
+                var durations = match.CloseMatchDurations.Take(availableTitles.Count).ToList();
+                match.CloseMatchDurations.Clear();
+                foreach (var duration in durations)
+                {
+                    match.CloseMatchDurations.Add(duration);
+                }
+            }
+
+            // Rebuild display strings with the filtered candidates
+            match.CloseMatchDisplayStrings.Clear();
+            if (match.CloseMatchDurations != null)
+            {
+                for (int i = 0; i < availableTitles.Count && i < match.CloseMatchDurations.Count; i++)
+                {
+                    var displayText = $"{availableTitles[i]}  [off by {match.CloseMatchDurations[i]:F1}s]";
+                    match.CloseMatchDisplayStrings.Add(displayText);
+                }
+            }
+
+            Console.WriteLine($"[DEBUG] Filtered close matches for '{match.VideoFile}': {originalCount} -> {availableTitles.Count} options");
+        }
+    }
+
+    /// <summary>
+    /// Clears all matching state when a new directory is selected.
+    /// Resets logs, match lists, and matching data for a fresh start.
+    /// </summary>
+    public void ClearMatchingState()
+    {
+        MatchList.Clear();
+        MatchResults = string.Empty;
+        _currentMatches.Clear();
+        Console.WriteLine("[DEBUG] Cleared matching state for new directory");
     }
 
     /// <summary>

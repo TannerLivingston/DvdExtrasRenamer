@@ -119,7 +119,7 @@ public class FileHandler
                     var candidateTitles = closeMatches.Select(m => m.Title).ToList();
                     var closeMatchDurations = closeMatches.Select(m => m.Diff).ToList();
                     
-                    onProgress?.Invoke($" - No exact match found. Showing closest options:\n", 0, 0);
+                    onProgress?.Invoke($" - No exact match found. Select from available options:\n", 0, 0);
                     matches.Add(new VideoMatch(
                         VideoFile: videoFile.Name,
                         CandidateExtraTitles: candidateTitles,
